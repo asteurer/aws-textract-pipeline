@@ -1,6 +1,6 @@
 /*
 -------------------------------
-Provider
+Provider Configuration
 -------------------------------
 */
 
@@ -73,7 +73,7 @@ data "aws_iam_policy_document" "allow_lambda_and_textract" {
     }
 }
 
-// Creating the directory structure in S3 that's important to the lambda function's logic.
+// Creating the directory structure in S3 that's part of the lambda function's logic.
 resource "aws_s3_object" "object" {
     for_each = toset(["pdf_images/", "csv_data/"])
     bucket = var.bucket_name
@@ -106,15 +106,8 @@ resource "aws_iam_role" "iam_for_lambda" {
   assume_role_policy = data.aws_iam_policy_document.assume_role.json
 }
 
-data "archive_file" "lambda" {
-  type        = "zip"
-  source_dir  = "${path.module}/python-scripts"
-  output_path = "${path.module}/lambda_function_payload.zip"
-}
-
+// Creating the Lambda Function
 resource "aws_lambda_function" "textract_lambda" {
-  # If the file is not in the current working directory you will need to include a
-  # path.module in the filename.
   filename      = "lambda_function_payload.zip"
   function_name = "call-textract"
   role          = aws_iam_role.iam_for_lambda.arn
@@ -132,34 +125,37 @@ resource "aws_lambda_function" "textract_lambda" {
   }
 }
 
-data "aws_iam_policy_document" "lambda_logging_policy" {
-  statement {
-    effect = "Allow"
-
-    actions = [
-      "logs:CreateLogGroup",
-      "logs:CreateLogStream",
-      "logs:PutLogEvents"
-    ]
-
-    resources = [
-      "arn:aws:logs:*:*:*"
-    ]
-  }
+data "archive_file" "lambda" {
+  type        = "zip"
+  source_dir  = "${path.module}/python-scripts"
+  output_path = "${path.module}/lambda_function_payload.zip"
 }
 
-data "aws_iam_policy_document" "lambda_textract_policy" {
-  statement {
-    effect = "Allow"
 
-    actions = [
-      "textract:*"
-    ]
+// Permissions for SNS
+resource "aws_iam_role_policy_attachment" "lambda_sns_publish_attachment" {
+  role = aws_iam_role.iam_for_lambda.id
+  policy_arn = aws_iam_policy.lambda_sns_publish.arn
+}
 
-    resources = [
-      "*"  // You can specify more granular resources if needed
-    ]
-  }
+resource "aws_iam_policy" "lambda_sns_publish" {
+  name = "lambda_sns_publish_policy"
+  policy = data.aws_iam_policy_document.lambda_sns_publish_policy.json
+}
+
+data "aws_iam_policy_document" "lambda_sns_publish_policy" {
+    statement {
+      effect = "Allow"
+      actions = ["sns:Publish"]
+      resources = [aws_sns_topic.on_lambda_function_error.arn]
+    }
+}
+
+
+// Permissions for Textract
+resource "aws_iam_role_policy_attachment" "lambda_textract_attachment" {
+  role       = aws_iam_role.iam_for_lambda.name
+  policy_arn = aws_iam_policy.textract_policy.arn
 }
 
 resource "aws_iam_policy" "textract_policy" {
@@ -167,19 +163,38 @@ resource "aws_iam_policy" "textract_policy" {
   policy = data.aws_iam_policy_document.lambda_textract_policy.json
 }
 
-resource "aws_iam_role_policy_attachment" "lambda_textract_attachment" {
-  role       = aws_iam_role.iam_for_lambda.name
-  policy_arn = aws_iam_policy.textract_policy.arn
+data "aws_iam_policy_document" "lambda_textract_policy" {
+  statement {
+    effect = "Allow"
+    actions = ["textract:*"]
+    resources = ["*"]
+  }
 }
 
-resource "aws_iam_policy" "lambda_logging" {
-  name   = "lambda_logging_policy"
-  policy = data.aws_iam_policy_document.lambda_logging_policy.json
+
+// Permissions for S3
+resource "aws_iam_role_policy_attachment" "lambda_s3_attachment" {
+  role       = aws_iam_role.iam_for_lambda.name
+  policy_arn = aws_iam_policy.lambda_s3_access_policy.arn
 }
 
-resource "aws_iam_role_policy_attachment" "lambda_logs_attachment" {
-  role       = aws_iam_role.iam_for_lambda.name
-  policy_arn = aws_iam_policy.lambda_logging.arn
+resource "aws_iam_policy" "lambda_s3_access_policy" {
+  name   = "lambda_s3_access_policy"
+  policy = data.aws_iam_policy_document.lambda_s3_policy.json
+}
+
+data "aws_iam_policy_document" "lambda_s3_policy" {
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "s3:GetObject",
+      "s3:GetObjectAttributes", 
+      "s3:PutObject"
+    ]
+
+    resources = ["${aws_s3_bucket.textract_data_bucket.arn}/*"]
+  }
 }
 
 resource "aws_lambda_permission" "allow_S3" {
@@ -200,31 +215,31 @@ resource "aws_s3_bucket_notification" "aws_lambda_trigger" {
     }
 }
 
-data "aws_iam_policy_document" "lambda_s3_policy" {
+
+// Permission for CloudWatch
+resource "aws_iam_role_policy_attachment" "lambda_logs_attachment" {
+  role       = aws_iam_role.iam_for_lambda.name
+  policy_arn = aws_iam_policy.lambda_logging.arn
+}
+
+resource "aws_iam_policy" "lambda_logging" {
+  name   = "lambda_logging_policy"
+  policy = data.aws_iam_policy_document.lambda_logging_policy.json
+}
+
+
+data "aws_iam_policy_document" "lambda_logging_policy" {
   statement {
     effect = "Allow"
 
     actions = [
-      "s3:GetObject",
-      "s3:GetObjectAttributes", 
-      "s3:PutObject"
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents"
     ]
 
-    resources = [
-      "${aws_s3_bucket.textract_data_bucket.arn}/*"
-      // This grants access to all objects in the specified bucket
-    ]
+    resources = ["arn:aws:logs:*:*:*"]
   }
-}
-
-resource "aws_iam_policy" "lambda_s3_access_policy" {
-  name   = "lambda_s3_access_policy"
-  policy = data.aws_iam_policy_document.lambda_s3_policy.json
-}
-
-resource "aws_iam_role_policy_attachment" "lambda_s3_attachment" {
-  role       = aws_iam_role.iam_for_lambda.name
-  policy_arn = aws_iam_policy.lambda_s3_access_policy.arn
 }
 
 /*
@@ -234,7 +249,7 @@ SNS Topic
 */
 
 resource "aws_sns_topic" "on_lambda_function_error" {
-    name = "on_lambda_textract_error"
+    name = "on-lambda-textract-error"
     tags = {
         project = var.project_name
     }
@@ -249,18 +264,4 @@ resource "aws_sns_topic_subscription" "lambda_topic" {
 variable "email" {
     default = "null"
     description = "The email of the person who should be notified on failure of the lambda function."
-}
-
-resource "aws_iam_role_policy" "lambda_sns_publish" {
-  role   = aws_iam_role.iam_for_lambda.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect    = "Allow"
-        Action    = "sns:Publish"
-        Resource  = aws_sns_topic.on_lambda_function_error.arn
-      },
-    ]
-  })
 }
