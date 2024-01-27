@@ -1,7 +1,7 @@
 # AWS Textract Pipeline
 
 This uses AWS infrastructure to deliver PDF images to Textract and extract the response text. For a visual
-representation of the infrastructure, see ***textract-pipeline-flowchart.pdf*** in the repository.
+representation of the infrastructure, see **textract-pipeline-flowchart.pdf** in the repository.
 
 ## Description
 
