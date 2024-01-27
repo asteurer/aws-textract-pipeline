@@ -115,6 +115,7 @@ resource "aws_lambda_function" "textract_lambda" {
   source_code_hash = data.archive_file.lambda.output_base64sha256
   runtime = "python3.10"
   timeout = 300
+  reserved_concurrent_executions = 15 // Textract throttles with too many concurrent lambda functions
 
   dead_letter_config {
     target_arn = aws_sns_topic.on_lambda_function_error.arn
