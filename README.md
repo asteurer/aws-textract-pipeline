@@ -63,7 +63,6 @@ An SNS topic (**on_lambda_function_error**) is set up as a dead letter queue for
 2. **Plan**: Execute **terraform plan** to preview the changes.
 3. **Apply**: Apply the changes useing **terraform apply**.
 4. When uploading PDF images to the S3 bucket, be sure to assign each PDF image a subfolder beneath the **pdf_images** folder; otherwise, the lambda function may run into issues.
-5. Keep in mind that the 
 
 ## Authors
 
