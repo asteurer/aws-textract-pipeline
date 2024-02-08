@@ -124,8 +124,8 @@ def make_and_place_csv(response, response_type, bucket_name, pdf_file_name):
     filepath = "/tmp/"
     filename = ""
     pdf_file_name_elements = pdf_file_name.split("/")
-    utility_folder = pdf_file_name_elements[-2]
-    pdf_control_number = pdf_file_name_elements[-1].split(".")[0] # Removing the filepath and the extension from the filename
+    subfolder = pdf_file_name_elements[-2]
+    filename_csv_folder = pdf_file_name_elements[-1].split(".")[0] # Removing the filepath and the extension from the filename
     
     if response_type == "detect_text":
         
@@ -163,8 +163,6 @@ def make_and_place_csv(response, response_type, bucket_name, pdf_file_name):
     with open(filepath, 'rb') as file:
         s3_client.put_object(
             Bucket=bucket_name, 
-            Key=f'csv_data/{utility_folder}/{pdf_control_number}/{filename}', 
+            Key=f'csv_data/{subfolder}/{filename_csv_folder}/{filename}', 
             Body=file.read()
         )
-
-    
